@@ -6,6 +6,7 @@ import (
 	crand "crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
@@ -1038,6 +1039,186 @@ func (suite *DriverSuite) TestConcurrentFileStreams() {
 	}
 
 	wg.Wait()
+}
+
+// TestUploadSessionConsistency tests that upload session paths provide immediate
+// read-after-write consistency, which is required for registry digest validation.
+// This test would have caught the NATS driver race condition.
+func (suite *DriverSuite) TestUploadSessionConsistency() {
+	if testing.Short() {
+		suite.T().Skip("Skipping upload session consistency test in short mode")
+	}
+
+	repository := "test/upload-session"
+	uploadID := "consistency-test-session"
+	uploadPath := fmt.Sprintf("/docker/registry/v2/repositories/%s/_uploads/%s/data", repository, uploadID)
+	
+	defer suite.deletePath(firstPart(uploadPath))
+
+	testData := []byte("upload session consistency test data")
+
+	// Create writer for upload session path
+	writer, err := suite.StorageDriver.Writer(suite.ctx, uploadPath, false)
+	suite.Require().NoError(err)
+
+	// Write data
+	n, err := writer.Write(testData)
+	suite.Require().NoError(err)
+	suite.Require().Equal(len(testData), n)
+
+	// CRITICAL: Try to read data BEFORE commit (this was failing with race condition)
+	reader, err := suite.StorageDriver.Reader(suite.ctx, uploadPath, 0)
+	suite.Require().NoError(err, "Upload session data should be readable before commit")
+	defer reader.Close()
+
+	readBuffer := make([]byte, len(testData))
+	bytesRead, err := reader.Read(readBuffer)
+	suite.Require().NoError(err, "Should be able to read upload session data before commit")
+	suite.Require().Equal(len(testData), bytesRead, "Should read all written data before commit")
+	suite.Require().Equal(testData, readBuffer[:bytesRead], "Data should match before commit")
+
+	// Commit should still work
+	err = writer.Commit(suite.ctx)
+	suite.Require().NoError(err)
+
+	// Verify data is still readable after commit
+	reader2, err := suite.StorageDriver.Reader(suite.ctx, uploadPath, 0)
+	suite.Require().NoError(err)
+	defer reader2.Close()
+
+	readBuffer2 := make([]byte, len(testData))
+	bytesRead2, err := reader2.Read(readBuffer2)
+	suite.Require().NoError(err)
+	suite.Require().Equal(len(testData), bytesRead2)
+	suite.Require().Equal(testData, readBuffer2[:bytesRead2])
+}
+
+// TestUploadSessionDigestValidationWorkflow simulates the exact workflow that
+// the registry uses for blob upload and digest validation.
+func (suite *DriverSuite) TestUploadSessionDigestValidationWorkflow() {
+	if testing.Short() {
+		suite.T().Skip("Skipping digest validation workflow test in short mode")
+	}
+
+	repository := "test/digest-validation"
+	uploadID := "digest-validation-session"
+	uploadPath := fmt.Sprintf("/docker/registry/v2/repositories/%s/_uploads/%s/data", repository, uploadID)
+	
+	defer suite.deletePath(firstPart(uploadPath))
+
+	// Simulate a typical blob upload
+	blobData := []byte("simulated blob content for digest validation")
+	expectedChecksum := fmt.Sprintf("%x", sha256.Sum256(blobData))
+
+	// Step 1: Registry creates upload session and writes blob data
+	writer, err := suite.StorageDriver.Writer(suite.ctx, uploadPath, false)
+	suite.Require().NoError(err)
+
+	// Step 2: Write blob data (could be multiple writes in real scenario)
+	_, err = writer.Write(blobData)
+	suite.Require().NoError(err)
+
+	// Step 3: Registry reads back data to validate digest BEFORE finalizing
+	// This is where the race condition was occurring
+	reader, err := suite.StorageDriver.Reader(suite.ctx, uploadPath, 0)
+	suite.Require().NoError(err, "Registry should be able to read upload data for digest validation")
+
+	readData, err := io.ReadAll(reader)
+	reader.Close()
+	suite.Require().NoError(err, "Should be able to read all upload data for validation")
+	suite.Require().Equal(blobData, readData, "Read data should match written data")
+
+	// Step 4: Validate digest
+	actualChecksum := fmt.Sprintf("%x", sha256.Sum256(readData))
+	suite.Require().Equal(expectedChecksum, actualChecksum, "Digest validation should succeed")
+
+	// Step 5: Commit the upload
+	err = writer.Commit(suite.ctx)
+	suite.Require().NoError(err, "Upload commit should succeed after digest validation")
+
+	// Step 6: Verify final state
+	finalReader, err := suite.StorageDriver.Reader(suite.ctx, uploadPath, 0)
+	suite.Require().NoError(err)
+	defer finalReader.Close()
+
+	finalData, err := io.ReadAll(finalReader)
+	suite.Require().NoError(err)
+	suite.Require().Equal(blobData, finalData, "Final data should match original")
+}
+
+// TestUploadSessionMultiChunkConsistency tests that multi-chunk uploads
+// maintain consistency throughout the process.
+func (suite *DriverSuite) TestUploadSessionMultiChunkConsistency() {
+	if testing.Short() {
+		suite.T().Skip("Skipping multi-chunk consistency test in short mode")
+	}
+
+	repository := "test/multi-chunk"
+	uploadID := "multi-chunk-session"
+	uploadPath := fmt.Sprintf("/docker/registry/v2/repositories/%s/_uploads/%s/data", repository, uploadID)
+	
+	defer suite.deletePath(firstPart(uploadPath))
+
+	// Prepare multiple chunks
+	chunk1 := []byte("first chunk of data ")
+	chunk2 := []byte("second chunk of data ")
+	chunk3 := []byte("third and final chunk")
+	totalData := append(append(chunk1, chunk2...), chunk3...)
+
+	writer, err := suite.StorageDriver.Writer(suite.ctx, uploadPath, false)
+	suite.Require().NoError(err)
+
+	// Write first chunk
+	_, err = writer.Write(chunk1)
+	suite.Require().NoError(err)
+
+	// Verify first chunk is readable
+	reader1, err := suite.StorageDriver.Reader(suite.ctx, uploadPath, 0)
+	suite.Require().NoError(err)
+	
+	data1, err := io.ReadAll(reader1)
+	reader1.Close()
+	suite.Require().NoError(err)
+	suite.Require().Equal(chunk1, data1, "First chunk should be readable immediately")
+
+	// Write second chunk
+	_, err = writer.Write(chunk2)
+	suite.Require().NoError(err)
+
+	// Verify both chunks are readable
+	reader2, err := suite.StorageDriver.Reader(suite.ctx, uploadPath, 0)
+	suite.Require().NoError(err)
+	
+	data2, err := io.ReadAll(reader2)
+	reader2.Close()
+	suite.Require().NoError(err)
+	suite.Require().Equal(append(chunk1, chunk2...), data2, "First two chunks should be readable")
+
+	// Write final chunk
+	_, err = writer.Write(chunk3)
+	suite.Require().NoError(err)
+
+	// Verify all chunks are readable before commit
+	readerFull, err := suite.StorageDriver.Reader(suite.ctx, uploadPath, 0)
+	suite.Require().NoError(err)
+	
+	fullData, err := io.ReadAll(readerFull)
+	readerFull.Close()
+	suite.Require().NoError(err)
+	suite.Require().Equal(totalData, fullData, "All chunks should be readable before commit")
+
+	// Commit
+	err = writer.Commit(suite.ctx)
+	suite.Require().NoError(err)
+
+	// Final verification
+	readerCommitted, err := suite.StorageDriver.Reader(suite.ctx, uploadPath, 0)
+	suite.Require().NoError(err)
+	defer readerCommitted.Close()
+	
+	committedData, err := io.ReadAll(readerCommitted)
+	suite.Require().NoError(err)
+	suite.Require().Equal(totalData, committedData, "All data should be readable after commit")
 }
 
 // TODO (brianbland): evaluate the relevancy of this test

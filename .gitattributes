@@ -1,0 +1,3 @@
+# Auto-resolve merge conflicts for NATS fork
+# Always keep our go.mod (Go 1.24 requirement for NATS)
+go.mod merge=ours

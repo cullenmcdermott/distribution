@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  registry:
+    build: .
+    ports:
+      - "5002:5000"
+      - "5003:5001"
+    volumes:
+      - ./config-nats.yml:/etc/docker/registry/config.yml
+    command: ["serve", "/etc/docker/registry/config.yml"]
+    depends_on:
+      - nats
+    environment:
+      - REGISTRY_LOG_LEVEL=debug
+
+  nats:
+    image: nats:latest
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: ["--jetstream", "--http_port", "8222"]
