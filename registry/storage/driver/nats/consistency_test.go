@@ -63,7 +63,7 @@ func TestUploadSessionReadBeforeCommit(t *testing.T) {
 		}
 
 		if string(readBuffer[:bytesRead]) != string(testData) {
-			t.Fatalf("data mismatch before commit: expected %q, got %q", 
+			t.Fatalf("data mismatch before commit: expected %q, got %q",
 				string(testData), string(readBuffer[:bytesRead]))
 		}
 
@@ -78,7 +78,7 @@ func TestUploadSessionReadBeforeCommit(t *testing.T) {
 
 	t.Run("multiple_writes_immediate_read", func(t *testing.T) {
 		uploadDataPath2 := fmt.Sprintf("/docker/registry/v2/repositories/%s/_uploads/%s-multi/data", repository, uploadID)
-		
+
 		writer, err := natsDriver.Writer(ctx, uploadDataPath2, false)
 		if err != nil {
 			t.Fatalf("failed to create writer: %v", err)
@@ -88,7 +88,7 @@ func TestUploadSessionReadBeforeCommit(t *testing.T) {
 		chunk1 := []byte("first chunk ")
 		chunk2 := []byte("second chunk ")
 		chunk3 := []byte("third chunk")
-		
+
 		totalData := append(append(chunk1, chunk2...), chunk3...)
 
 		// Write first chunk
@@ -102,11 +102,11 @@ func TestUploadSessionReadBeforeCommit(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create reader after chunk1: %v", err)
 		}
-		
+
 		buffer1 := make([]byte, len(chunk1))
 		n1, err := reader1.Read(buffer1)
 		reader1.Close()
-		
+
 		if err != nil {
 			t.Fatalf("failed to read after chunk1: %v", err)
 		}
@@ -119,7 +119,7 @@ func TestUploadSessionReadBeforeCommit(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to write chunk2: %v", err)
 		}
-		
+
 		_, err = writer.Write(chunk3)
 		if err != nil {
 			t.Fatalf("failed to write chunk3: %v", err)
@@ -143,7 +143,7 @@ func TestUploadSessionReadBeforeCommit(t *testing.T) {
 		}
 
 		if string(fullBuffer[:totalRead]) != string(totalData) {
-			t.Fatalf("data mismatch: expected %q, got %q", 
+			t.Fatalf("data mismatch: expected %q, got %q",
 				string(totalData), string(fullBuffer[:totalRead]))
 		}
 
@@ -192,7 +192,7 @@ func TestUploadSessionMetadataConsistency(t *testing.T) {
 
 		// After the fix, TotalSize and ChunkCount should be consistent
 		if metadata.TotalSize > 0 && metadata.ChunkCount == 0 {
-			t.Fatalf("INCONSISTENT METADATA: TotalSize=%d but ChunkCount=%d", 
+			t.Fatalf("INCONSISTENT METADATA: TotalSize=%d but ChunkCount=%d",
 				metadata.TotalSize, metadata.ChunkCount)
 		}
 
@@ -226,7 +226,7 @@ func TestUploadSessionMetadataConsistency(t *testing.T) {
 			t.Fatalf("failed to commit: %v", err)
 		}
 
-		t.Logf("SUCCESS: Metadata is consistent (TotalSize=%d, ChunkCount=%d)", 
+		t.Logf("SUCCESS: Metadata is consistent (TotalSize=%d, ChunkCount=%d)",
 			metadata.TotalSize, metadata.ChunkCount)
 	})
 }
@@ -254,7 +254,7 @@ func TestConcurrentUploadSessionWriteRead(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			
+
 			writer, err := natsDriver.Writer(ctx, uploadDataPath, false)
 			if err != nil {
 				writeErr = fmt.Errorf("failed to create writer: %w", err)
@@ -284,11 +284,11 @@ func TestConcurrentUploadSessionWriteRead(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			
+
 			// Try reading multiple times like registry would do
 			for attempts := 0; attempts < 10; attempts++ {
 				time.Sleep(20 * time.Millisecond)
-				
+
 				reader, err := natsDriver.Reader(ctx, uploadDataPath, 0)
 				if err != nil {
 					// Expected early in the process
@@ -343,8 +343,8 @@ func TestConcurrentUploadSessionWriteRead(t *testing.T) {
 			wg.Add(1)
 			go func(sessionIndex int) {
 				defer wg.Done()
-				
-				sessionPath := fmt.Sprintf("/docker/registry/v2/repositories/%s/_uploads/session-%d/data", 
+
+				sessionPath := fmt.Sprintf("/docker/registry/v2/repositories/%s/_uploads/session-%d/data",
 					repository, sessionIndex)
 				sessionData := []byte(fmt.Sprintf("session %d test data", sessionIndex))
 
@@ -419,7 +419,7 @@ func TestUploadSessionVsRegularFile(t *testing.T) {
 	t.Run("upload_session_immediate_consistency", func(t *testing.T) {
 		// Upload session path - should be immediately readable
 		uploadPath := "/docker/registry/v2/repositories/test/repo/_uploads/test-uuid/data"
-		
+
 		writer, err := natsDriver.Writer(ctx, uploadPath, false)
 		if err != nil {
 			t.Fatalf("failed to create upload session writer: %v", err)
@@ -458,7 +458,7 @@ func TestUploadSessionVsRegularFile(t *testing.T) {
 	t.Run("regular_file_eventual_consistency", func(t *testing.T) {
 		// Regular file path - may not be immediately readable (implementation dependent)
 		regularPath := "/test/regular/file.txt"
-		
+
 		writer, err := natsDriver.Writer(ctx, regularPath, false)
 		if err != nil {
 			t.Fatalf("failed to create regular file writer: %v", err)
@@ -471,7 +471,7 @@ func TestUploadSessionVsRegularFile(t *testing.T) {
 
 		// For regular files, we don't guarantee immediate readability
 		// (though NATS implementation happens to provide it due to the fix)
-		
+
 		err = writer.Commit(ctx)
 		if err != nil {
 			t.Fatalf("failed to commit regular file: %v", err)

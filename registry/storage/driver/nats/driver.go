@@ -43,17 +43,17 @@ func init() {
 type PathType int
 
 const (
-	PathTypeRegular          PathType = iota  // 0
-	PathTypeUploadData                        // 1  
-	PathTypeUploadHashstates                  // 2
+	PathTypeRegular          PathType = iota // 0
+	PathTypeUploadData                       // 1
+	PathTypeUploadHashstates                 // 2
 )
 
 // PathInfo contains parsed information about a registry path
 type PathInfo struct {
-	Type        PathType
-	UploadID    string
-	Repository  string
-	Digest      string
+	Type       PathType
+	UploadID   string
+	Repository string
+	Digest     string
 }
 
 // PathRouter consolidates all path parsing logic into a single component
@@ -85,7 +85,7 @@ func (pr *PathRouter) ParsePath(path string) PathInfo {
 			UploadID:   matches[2],
 		}
 	}
-	
+
 	// Check for upload hashstates paths
 	if matches := pr.uploadHashRegex.FindStringSubmatch(path); len(matches) == 3 {
 		return PathInfo{
@@ -94,7 +94,7 @@ func (pr *PathRouter) ParsePath(path string) PathInfo {
 			UploadID:   matches[2],
 		}
 	}
-	
+
 	// For regular paths, extract digest if available
 	return PathInfo{
 		Type:   PathTypeRegular,
@@ -108,7 +108,7 @@ func (pr *PathRouter) extractDigest(path string) string {
 		// Reconstruct full 64-character digest from 2-char prefix + 62-char suffix
 		return matches[1] + matches[2]
 	}
-	
+
 	// Fallback to full hash (no truncation to avoid collisions)
 	h := sha256.Sum256([]byte(path))
 	return hex.EncodeToString(h[:])
@@ -249,12 +249,12 @@ func (d *natsDriver) GetContent(ctx context.Context, path string) ([]byte, error
 		return nil, fmt.Errorf("failed to create reader for path '%s': %w", path, err)
 	}
 	defer reader.Close()
-	
+
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read content from path '%s': %w", path, err)
 	}
-	
+
 	return data, nil
 }
 
@@ -263,25 +263,25 @@ func (d *natsDriver) PutContent(ctx context.Context, path string, content []byte
 	if err != nil {
 		return fmt.Errorf("failed to create writer for path '%s': %w", path, err)
 	}
-	
+
 	_, err = writer.Write(content)
 	if err != nil {
-		writer.Cancel(ctx)
+		_ = writer.Cancel(ctx)
 		return fmt.Errorf("failed to write %d bytes to path '%s': %w", len(content), path, err)
 	}
-	
+
 	err = writer.Commit(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to commit write to path '%s': %w", path, err)
 	}
-	
+
 	return nil
 }
 
 func (d *natsDriver) Reader(ctx context.Context, path string, offset int64) (io.ReadCloser, error) {
 	// Use PathRouter for clean path classification
 	pathInfo := d.pathRouter.ParsePath(path)
-	
+
 	switch pathInfo.Type {
 	case PathTypeUploadData:
 		// Handle actual blob data for upload sessions
@@ -289,41 +289,41 @@ func (d *natsDriver) Reader(ctx context.Context, path string, offset int64) (io.
 		if err != nil {
 			return nil, parseNATSError(path, err)
 		}
-		
+
 		// CRITICAL FIX: Don't rely solely on metadata.ChunkCount due to race conditions
 		// During upload sessions, TotalSize may be updated before ChunkCount
 		// Let the chunkReader handle the actual chunk existence checking
 		if metadata.TotalSize == 0 && metadata.ChunkCount == 0 {
 			return nil, driver.PathNotFoundError{Path: path}
 		}
-		
+
 		return newChunkReader(ctx, d, metadata, offset)
-		
+
 	case PathTypeUploadHashstates:
 		data, err := d.getHashstatesData(ctx, path)
 		if err != nil {
 			return nil, parseNATSError(path, err)
 		}
-		
+
 		// Handle offset for hashstates
 		if offset > int64(len(data)) {
 			return nil, driver.InvalidOffsetError{Path: path, Offset: offset}
 		}
-		
+
 		return io.NopCloser(bytes.NewReader(data[offset:])), nil
-		
+
 	default:
 		// Regular file paths - use unified metadata
 		metadata, err := d.loadMetadata(ctx, path)
 		if err != nil {
 			return nil, parseNATSError(path, err)
 		}
-		
+
 		// For regular files, we can be stricter about ChunkCount since there's no race condition
 		if metadata.ChunkCount == 0 {
 			return nil, driver.PathNotFoundError{Path: path}
 		}
-		
+
 		return newChunkReader(ctx, d, metadata, offset)
 	}
 }
@@ -338,10 +338,10 @@ func (d *natsDriver) Stat(ctx context.Context, path string) (driver.FileInfo, er
 	if path == "/" {
 		return nil, driver.PathNotFoundError{Path: path}
 	}
-	
+
 	// Use PathRouter for clean path classification
 	pathInfo := d.pathRouter.ParsePath(path)
-	
+
 	switch pathInfo.Type {
 	case PathTypeUploadData:
 		// Use unified metadata system for upload session data
@@ -349,7 +349,7 @@ func (d *natsDriver) Stat(ctx context.Context, path string) (driver.FileInfo, er
 		if err != nil {
 			return nil, parseNATSError(path, err)
 		}
-		
+
 		return driver.FileInfoInternal{
 			FileInfoFields: driver.FileInfoFields{
 				Path:    path,
@@ -358,13 +358,13 @@ func (d *natsDriver) Stat(ctx context.Context, path string) (driver.FileInfo, er
 				IsDir:   false,
 			},
 		}, nil
-		
+
 	case PathTypeUploadHashstates:
 		data, err := d.getHashstatesData(ctx, path)
 		if err != nil {
 			return nil, parseNATSError(path, err)
 		}
-		
+
 		return driver.FileInfoInternal{
 			FileInfoFields: driver.FileInfoFields{
 				Path:    path,
@@ -373,14 +373,14 @@ func (d *natsDriver) Stat(ctx context.Context, path string) (driver.FileInfo, er
 				IsDir:   false,
 			},
 		}, nil
-		
+
 	default:
 		// Regular file paths - use unified metadata system
 		metadata, err := d.loadMetadata(ctx, path)
 		if err != nil {
 			return nil, parseNATSError(path, err)
 		}
-		
+
 		return driver.FileInfoInternal{
 			FileInfoFields: driver.FileInfoFields{
 				Path:    path,
@@ -405,7 +405,7 @@ func (d *natsDriver) List(ctx context.Context, path string) ([]string, error) {
 	if err != nil {
 		return nil, parseNATSError(path, err)
 	}
-	
+
 	var results []string
 	for _, obj := range objects {
 		objPath := "/" + obj.Name
@@ -413,7 +413,7 @@ func (d *natsDriver) List(ctx context.Context, path string) ([]string, error) {
 			results = append(results, objPath)
 		}
 	}
-	
+
 	return results, nil
 }
 
@@ -422,17 +422,17 @@ func (d *natsDriver) Move(ctx context.Context, sourcePath, destPath string) erro
 	if err != nil {
 		return fmt.Errorf("failed to read source path '%s' during move: %w", sourcePath, err)
 	}
-	
+
 	err = d.PutContent(ctx, destPath, content)
 	if err != nil {
 		return fmt.Errorf("failed to write to destination path '%s' during move: %w", destPath, err)
 	}
-	
+
 	err = d.Delete(ctx, sourcePath)
 	if err != nil {
 		return fmt.Errorf("failed to delete source path '%s' after move to '%s': %w", sourcePath, destPath, err)
 	}
-	
+
 	return nil
 }
 
@@ -442,7 +442,7 @@ func (d *natsDriver) Delete(ctx context.Context, path string) error {
 	if err != nil {
 		return parseNATSError(path, err)
 	}
-	
+
 	// Delete all chunks
 	pathInfo := d.pathRouter.ParsePath(path)
 	var pathHash string
@@ -451,7 +451,7 @@ func (d *natsDriver) Delete(ctx context.Context, path string) error {
 	} else {
 		pathHash = pathInfo.Digest
 	}
-	
+
 	// Delete each chunk
 	for i := 0; i < metadata.ChunkCount; i++ {
 		// Delete chunk data
@@ -461,7 +461,7 @@ func (d *natsDriver) Delete(ctx context.Context, path string) error {
 			// Log error but continue with cleanup - could add proper logging here
 		}
 	}
-	
+
 	// Delete main metadata
 	return d.deleteMetadata(ctx, path)
 }
@@ -479,11 +479,11 @@ func (d *natsDriver) HealthCheck() error {
 	if d.nc == nil || !d.nc.IsConnected() {
 		return fmt.Errorf("NATS connection is not available (url: %s)", d.config.ServerURL)
 	}
-	
+
 	// Test KV store connectivity with a simple operation
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	// Test basic KV connectivity by checking if our KV store exists
 	info, err := d.kv.Status(ctx)
 	if err != nil {
@@ -492,28 +492,24 @@ func (d *natsDriver) HealthCheck() error {
 	if info == nil {
 		return fmt.Errorf("NATS KV store bucket '%s' not available", d.config.Bucket+"_metadata")
 	}
-	
-	return nil
-}
 
-func (d *natsDriver) natsPath(registryPath string) string {
-	return strings.TrimPrefix(registryPath, "/docker/registry/v2/")
+	return nil
 }
 
 func parseNATSError(path string, err error) error {
 	if err == jetstream.ErrObjectNotFound {
 		return driver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
-	
+
 	if err == jetstream.ErrKeyNotFound {
 		return driver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
-	
+
 	// Handle NATS errors - check for "not found" in error message
 	if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "key not found") {
 		return driver.PathNotFoundError{Path: path, DriverName: driverName}
 	}
-	
+
 	return driver.Error{
 		DriverName: driverName,
 		Detail:     fmt.Errorf("NATS operation failed for path '%s': %w", path, err),
@@ -538,7 +534,7 @@ func (d *natsDriver) getHashstatesData(ctx context.Context, path string) ([]byte
 		return nil, err
 	}
 	defer reader.Close()
-	
+
 	return io.ReadAll(reader)
 }
 
@@ -595,7 +591,7 @@ func buildAuthOptions(authConfig AuthConfig) ([]nats.Option, error) {
 		if authConfig.NKeySeed == "" && authConfig.NKeyFile == "" {
 			return nil, fmt.Errorf("JWT authentication requires NKey for signing (set 'nkeyseed' or 'nkeyfile')")
 		}
-		
+
 		var sigHandler nats.SignatureHandler
 		if authConfig.NKeyFile != "" {
 			// Load NKey from file for signing
@@ -626,7 +622,6 @@ func buildAuthOptions(authConfig AuthConfig) ([]nats.Option, error) {
 
 	case "":
 		// No authentication configured
-		break
 
 	default:
 		return nil, fmt.Errorf("unsupported authentication type: %s", authConfig.Type)
@@ -665,12 +660,12 @@ func buildTLSConfig(tlsConfig TLSConfig) (*tls.Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read CA certificate from file '%s': %w", tlsConfig.CAFile, err)
 		}
-		
+
 		caCertPool := config.RootCAs
 		if caCertPool == nil {
 			caCertPool = x509.NewCertPool()
 		}
-		
+
 		if !caCertPool.AppendCertsFromPEM(caCert) {
 			return nil, fmt.Errorf("failed to parse CA certificate from file '%s' - invalid PEM format", tlsConfig.CAFile)
 		}
@@ -679,4 +674,3 @@ func buildTLSConfig(tlsConfig TLSConfig) (*tls.Config, error) {
 
 	return config, nil
 }
-

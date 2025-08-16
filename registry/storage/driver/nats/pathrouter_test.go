@@ -6,7 +6,7 @@ import (
 
 func TestPathRouter(t *testing.T) {
 	router := NewPathRouter()
-	
+
 	testCases := []struct {
 		path         string
 		expectedType PathType
@@ -38,15 +38,15 @@ func TestPathRouter(t *testing.T) {
 			description:  "regular manifest path",
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			result := router.ParsePath(tc.path)
-			
+
 			if result.Type != tc.expectedType {
 				t.Errorf("Expected type %v, got %v for path %s", tc.expectedType, result.Type, tc.path)
 			}
-			
+
 			if result.UploadID != tc.expectedID {
 				t.Errorf("Expected upload ID %s, got %s for path %s", tc.expectedID, result.UploadID, tc.path)
 			}
@@ -56,7 +56,7 @@ func TestPathRouter(t *testing.T) {
 
 func TestPathRouterDigestExtraction(t *testing.T) {
 	router := NewPathRouter()
-	
+
 	testCases := []struct {
 		path           string
 		expectedDigest string
@@ -73,11 +73,11 @@ func TestPathRouterDigestExtraction(t *testing.T) {
 			description:    "SHA256 path with different digest",
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			result := router.ParsePath(tc.path)
-			
+
 			if result.Digest != tc.expectedDigest {
 				t.Errorf("Expected digest %s, got %s for path %s", tc.expectedDigest, result.Digest, tc.path)
 			}

@@ -16,12 +16,12 @@ import (
 
 // NATSSDKTester provides direct NATS SDK integration for comprehensive testing
 type NATSSDKTester struct {
-	nc       *nats.Conn
-	js       jetstream.JetStream
-	os       jetstream.ObjectStore
-	kv       jetstream.KeyValue
-	bucket   string
-	driver   *natsDriver
+	nc     *nats.Conn
+	js     jetstream.JetStream
+	os     jetstream.ObjectStore
+	kv     jetstream.KeyValue
+	bucket string
+	driver *natsDriver
 }
 
 // NewNATSSDKTester creates a new NATS SDK tester connected to the same NATS instance as the driver
@@ -83,7 +83,7 @@ func (tester *NATSSDKTester) ValidateBlobExists(t *testing.T, blobDigest digest.
 // ValidateBlobExistsNonFatal checks if a blob exists and has the correct size (non-fatal version)
 func (tester *NATSSDKTester) ValidateBlobExistsNonFatal(blobDigest digest.Digest, expectedSize int) error {
 	ctx := context.Background()
-	
+
 	// Parse the digest to get the hash
 	digestStr := blobDigest.String()
 	if !strings.HasPrefix(digestStr, "sha256:") {
@@ -127,7 +127,7 @@ func (tester *NATSSDKTester) ValidateManifestExists(t *testing.T, manifestDigest
 // ValidateManifestExistsNonFatal checks if a manifest exists (non-fatal version)
 func (tester *NATSSDKTester) ValidateManifestExistsNonFatal(manifestDigest digest.Digest) error {
 	ctx := context.Background()
-	
+
 	// Parse the digest to get the hash
 	digestStr := manifestDigest.String()
 	if !strings.HasPrefix(digestStr, "sha256:") {
@@ -150,7 +150,7 @@ func (tester *NATSSDKTester) ValidateDataIntegrity(t *testing.T, blobDigest dige
 	t.Helper()
 
 	ctx := context.Background()
-	
+
 	// Parse the digest to get the hash
 	digestStr := blobDigest.String()
 	if !strings.HasPrefix(digestStr, "sha256:") {
@@ -169,18 +169,18 @@ func (tester *NATSSDKTester) ValidateDataIntegrity(t *testing.T, blobDigest dige
 	var reconstructedData []byte
 	for i := 0; i < metadata.ChunkCount; i++ {
 		chunkPath := chunkKey(hash, i)
-		
+
 		chunkReader, err := tester.os.Get(ctx, chunkPath)
 		if err != nil {
 			t.Fatalf("failed to get chunk %d for %s: %v", i, blobDigest, err)
 		}
-		
+
 		chunkData, err := io.ReadAll(chunkReader)
 		chunkReader.Close()
 		if err != nil {
 			t.Fatalf("failed to read chunk %d for %s: %v", i, blobDigest, err)
 		}
-		
+
 		reconstructedData = append(reconstructedData, chunkData...)
 	}
 
@@ -193,7 +193,7 @@ func (tester *NATSSDKTester) ValidateDataIntegrity(t *testing.T, blobDigest dige
 	// Verify checksum
 	expectedChecksum := sha256.Sum256(originalData)
 	actualChecksum := sha256.Sum256(reconstructedData)
-	
+
 	if !bytes.Equal(expectedChecksum[:], actualChecksum[:]) {
 		t.Errorf("checksum mismatch for %s", blobDigest)
 		t.Logf("Expected: %x", expectedChecksum)
@@ -206,7 +206,7 @@ func (tester *NATSSDKTester) ValidateChunkStructure(t *testing.T, blobDigest dig
 	t.Helper()
 
 	ctx := context.Background()
-	
+
 	// Parse the digest to get the hash
 	digestStr := blobDigest.String()
 	if !strings.HasPrefix(digestStr, "sha256:") {
@@ -229,22 +229,22 @@ func (tester *NATSSDKTester) ValidateChunkStructure(t *testing.T, blobDigest dig
 	// Validate that all chunks exist and have correct sizes (using chunk metadata)
 	for i := 0; i < metadata.ChunkCount; i++ {
 		chunkPath := chunkKey(hash, i)
-		
+
 		info, err := tester.os.GetInfo(ctx, chunkPath)
 		if err != nil {
 			t.Errorf("chunk %d not found for blob %s: %v", i, blobDigest, err)
 			continue
 		}
-		
+
 		// Load chunk metadata to verify size
 		chunkMeta, err := tester.driver.loadChunkMetadata(ctx, hash, i)
 		if err != nil {
 			t.Errorf("chunk metadata %d not found for blob %s: %v", i, blobDigest, err)
 			continue
 		}
-		
+
 		if info.Size != uint64(chunkMeta.Size) {
-			t.Errorf("chunk %d size mismatch for blob %s: expected %d, got %d", 
+			t.Errorf("chunk %d size mismatch for blob %s: expected %d, got %d",
 				i, blobDigest, chunkMeta.Size, info.Size)
 		}
 	}

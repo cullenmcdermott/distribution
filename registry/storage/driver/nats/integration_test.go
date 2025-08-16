@@ -9,10 +9,10 @@ import (
 
 	"github.com/distribution/distribution/v3"
 	dcontext "github.com/distribution/distribution/v3/internal/dcontext"
-	"github.com/distribution/reference"
+	"github.com/distribution/distribution/v3/manifest/schema2"
 	"github.com/distribution/distribution/v3/registry/storage"
 	"github.com/distribution/distribution/v3/registry/storage/driver"
-	"github.com/distribution/distribution/v3/manifest/schema2"
+	"github.com/distribution/reference"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -27,7 +27,7 @@ func TestNATSIntegration(t *testing.T) {
 	}
 
 	ctx := dcontext.Background()
-	
+
 	// Setup embedded NATS server and driver
 	ns, nc, cleanup := startEmbeddedNATS(t)
 	defer cleanup()
@@ -37,7 +37,6 @@ func TestNATSIntegration(t *testing.T) {
 		ServerURL: nc.ConnectedUrl(),
 		Bucket:    "registry-integration-test",
 	}
-	_ = config
 
 	natsDriver, err := New(ctx, config)
 	if err != nil {
@@ -100,7 +99,7 @@ func testPushPullWorkflow(t *testing.T, registry distribution.Namespace, cliHelp
 
 	// Push layer (blob)
 	layerDigest := pushLayer(t, repo, testData)
-	
+
 	// Validate layer exists in NATS
 	cliHelper.validateBlobExists(t, layerDigest, len(testData))
 
@@ -172,13 +171,13 @@ func testComplexManifestWorkflow(t *testing.T, registry distribution.Namespace, 
 		Digest:    configDigest,
 	}
 
-	var layerDescriptors []distribution.Descriptor
-	for _, layer := range layers {
-		layerDescriptors = append(layerDescriptors, distribution.Descriptor{
+	layerDescriptors := make([]distribution.Descriptor, len(layers))
+	for i, layer := range layers {
+		layerDescriptors[i] = distribution.Descriptor{
 			MediaType: "application/vnd.docker.image.rootfs.diff.tar.gzip",
 			Size:      int64(len(layer.data)),
 			Digest:    layer.digest,
-		})
+		}
 	}
 
 	manifest, err := schema2.FromStruct(schema2.Manifest{
@@ -211,7 +210,7 @@ func testComplexManifestWorkflow(t *testing.T, registry distribution.Namespace, 
 
 func testConcurrentOperations(t *testing.T, registry distribution.Namespace, cliHelper *natsCLIHelper) {
 	ctx := dcontext.Background()
-	
+
 	// Create multiple goroutines pushing different repositories
 	numWorkers := 5
 	results := make(chan error, numWorkers)
@@ -236,7 +235,7 @@ func testConcurrentOperations(t *testing.T, registry distribution.Namespace, cli
 
 			// Push layer
 			layerDigest := pushLayer(t, repo, testData)
-			
+
 			// Push manifest
 			manifestDigest := pushManifest(t, repo, layerDigest, int64(len(testData)))
 
@@ -268,7 +267,7 @@ func pushLayer(t *testing.T, repo distribution.Repository, data []byte) digest.D
 	ctx := dcontext.Background()
 
 	bs := repo.Blobs(ctx)
-	
+
 	// Calculate digest
 	layerDigest := digest.FromBytes(data)
 
@@ -280,12 +279,12 @@ func pushLayer(t *testing.T, repo distribution.Repository, data []byte) digest.D
 
 	n, err := writer.Write(data)
 	if err != nil {
-		writer.Cancel(ctx)
+		_ = writer.Cancel(ctx)
 		t.Fatalf("failed to write blob data: %v", err)
 	}
 
 	if n != len(data) {
-		writer.Cancel(ctx)
+		_ = writer.Cancel(ctx)
 		t.Fatalf("incomplete write: wrote %d, expected %d", n, len(data))
 	}
 
@@ -351,7 +350,7 @@ func pullLayer(t *testing.T, repo distribution.Repository, layerDigest digest.Di
 	ctx := dcontext.Background()
 
 	bs := repo.Blobs(ctx)
-	
+
 	reader, err := bs.Open(ctx, layerDigest)
 	if err != nil {
 		t.Fatalf("failed to open blob for reading: %v", err)
@@ -385,12 +384,12 @@ func pullManifest(t *testing.T, repo distribution.Repository, manifestDigest dig
 
 func generateTestData(t *testing.T, size int) []byte {
 	t.Helper()
-	
+
 	data := make([]byte, size)
 	_, err := rand.Read(data)
 	if err != nil {
 		t.Fatalf("failed to generate test data: %v", err)
 	}
-	
+
 	return data
 }

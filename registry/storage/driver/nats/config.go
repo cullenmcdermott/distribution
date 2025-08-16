@@ -8,24 +8,24 @@ import (
 
 // AuthConfig contains NATS authentication configuration
 type AuthConfig struct {
-	Type            string `json:"type"`                       // "nkey", "userpass", "token", "jwt"
-	NKeyFile        string `json:"nkeyfile,omitempty"`         // Path to NKey file
-	NKeySeed        string `json:"nkeyseed,omitempty"`         // NKey seed string
-	Username        string `json:"username,omitempty"`         // Username for user/pass auth
-	Password        string `json:"password,omitempty"`         // Password for user/pass auth
-	Token           string `json:"token,omitempty"`            // Token for token auth
-	JWT             string `json:"jwt,omitempty"`              // JWT for JWT auth
+	Type            string `json:"type"`                      // "nkey", "userpass", "token", "jwt"
+	NKeyFile        string `json:"nkeyfile,omitempty"`        // Path to NKey file
+	NKeySeed        string `json:"nkeyseed,omitempty"`        // NKey seed string
+	Username        string `json:"username,omitempty"`        // Username for user/pass auth
+	Password        string `json:"password,omitempty"`        // Password for user/pass auth
+	Token           string `json:"token,omitempty"`           // Token for token auth
+	JWT             string `json:"jwt,omitempty"`             // JWT for JWT auth
 	CredentialsFile string `json:"credentialsfile,omitempty"` // Path to credentials file
 }
 
 // TLSConfig contains TLS configuration options
 type TLSConfig struct {
-	Enabled      bool   `json:"enabled"`                 // Enable TLS
-	CertFile     string `json:"certfile,omitempty"`      // Client certificate file
-	KeyFile      string `json:"keyfile,omitempty"`       // Client private key file
-	CAFile       string `json:"cafile,omitempty"`        // CA certificate file
-	ServerName   string `json:"servername,omitempty"`    // Server name for certificate verification
-	InsecureSkip bool   `json:"insecureskip,omitempty"`  // Skip certificate verification
+	Enabled      bool   `json:"enabled"`                // Enable TLS
+	CertFile     string `json:"certfile,omitempty"`     // Client certificate file
+	KeyFile      string `json:"keyfile,omitempty"`      // Client private key file
+	CAFile       string `json:"cafile,omitempty"`       // CA certificate file
+	ServerName   string `json:"servername,omitempty"`   // Server name for certificate verification
+	InsecureSkip bool   `json:"insecureskip,omitempty"` // Skip certificate verification
 }
 
 // TimeoutConfig contains timeout and retry configuration
@@ -60,13 +60,13 @@ type JetStreamConfig struct {
 
 // Config represents the complete NATS driver configuration
 type Config struct {
-	ServerURL   string             `json:"serverurl"`
-	Bucket      string             `json:"bucket"`
-	Auth        AuthConfig         `json:"auth,omitempty"`
-	TLS         TLSConfig          `json:"tls,omitempty"`
-	Timeouts    TimeoutConfig      `json:"timeouts,omitempty"`
-	Performance PerformanceConfig  `json:"performance,omitempty"`
-	JetStream   JetStreamConfig    `json:"jetstream,omitempty"`
+	ServerURL   string            `json:"serverurl"`
+	Bucket      string            `json:"bucket"`
+	Auth        AuthConfig        `json:"auth,omitempty"`
+	TLS         TLSConfig         `json:"tls,omitempty"`
+	Timeouts    TimeoutConfig     `json:"timeouts,omitempty"`
+	Performance PerformanceConfig `json:"performance,omitempty"`
+	JetStream   JetStreamConfig   `json:"jetstream,omitempty"`
 }
 
 // DefaultConfig returns a Config with sensible defaults

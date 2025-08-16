@@ -70,23 +70,23 @@ func TestParseConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config, err := parseConfig(tt.parameters)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("expected error, got nil")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			
+
 			if config.ServerURL != tt.expected.ServerURL {
 				t.Errorf("expected ServerURL %q, got %q", tt.expected.ServerURL, config.ServerURL)
 			}
-			
+
 			if config.Bucket != tt.expected.Bucket {
 				t.Errorf("expected Bucket %q, got %q", tt.expected.Bucket, config.Bucket)
 			}
